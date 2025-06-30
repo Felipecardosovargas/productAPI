@@ -1,48 +1,85 @@
 package com.teach.productAPI.service;
 
+import com.teach.productAPI.dto.ProductMapper;
+import com.teach.productAPI.dto.ProductRequestDTO;
+import com.teach.productAPI.dto.ProductResponseDTO;
+import com.teach.productAPI.exeptions.ResourceNotFoundException;
 import com.teach.productAPI.model.Product;
+import com.teach.productAPI.repository.ProductRepository;
+import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 @Service
 public class ProductService {
 
-    private final Map<Long, Product> products = new HashMap<>();
-    private final AtomicLong idGenerator = new AtomicLong(1);
+    @Autowired
+    private ProductRepository productRepository;
 
-    public List<Product> list() {
-        return new ArrayList<>(products.values());
-    }
+    @Autowired
+    private ProductMapper productMapper;
 
-    public Product findById(Long id) {
-        return products.get(id);
-    }
+    @Transactional(readOnly = true)
+    public List<ProductResponseDTO> findAllProducts(LocalDateTime startDate, LocalDateTime endDate) {
+        List<Product> products;
 
-    public Product add(Product product) {
-        Long id = idGenerator.getAndIncrement();
-        product.setId(id);
-        products.put(id, product);
-        return product;
-    }
-
-    public Product parcialUpdate(Long id, String name, BigDecimal price) {
-        Product existing = products.get(id);
-
-        if (existing != null) {
-            if (name != null) existing.setName(name);
-            if (price != null) existing.setPrice(price);
+        if (startDate != null && endDate != null) {
+            products = productRepository.findByCreateDateBetween(startDate, endDate);
+        } else {
+            products = productRepository.findAll();
         }
 
-        return existing;
+        return products.stream()
+                .map(productMapper::toDto)
+                .collect(Collectors.toList());
     }
 
-    public void delete(Long id){
-        products.remove(id);
+    @Transactional(readOnly = true)
+    public ProductResponseDTO findProductById(Long id) {
+
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Produto não encontrado com ID "+id));
+        return productMapper.toDto(product);
+    }
+
+    @Transactional
+    public ProductResponseDTO addProduct(ProductRequestDTO productRequestDTO) {
+        Product product = productMapper.toEntity(productRequestDTO);
+        product.setCreateDate(LocalDateTime.now());
+
+        Product savedProduct = productRepository.save(product);
+        return productMapper.toDto(savedProduct);
+    }
+
+    @Transactional
+    public ProductResponseDTO updateProduct(Long id, @Valid ProductResponseDTO productRequestDTO) {
+        Product existingProduct = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Produto não encontrado com ID: "));
+
+        if (productRequestDTO.getName() != null && !productRequestDTO.getName().isBlank()) {
+            existingProduct.setName(productRequestDTO.getName());
+        }
+
+        if (productRequestDTO.getPrice() != null) {
+            existingProduct.setPrice(productRequestDTO.getPrice());
+        }
+
+        Product updatedProduct = productRepository.save(existingProduct);
+
+        return productMapper.toDto(updatedProduct);
+    }
+
+    @Transactional
+    public void deleteProduct(Long id) {
+        if (!productRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Produto não encontrado com ID: "+ id);
+        }
+
+        productRepository.deleteById(id);
     }
 }
