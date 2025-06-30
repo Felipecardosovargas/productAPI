@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProdutoRequestDTO {
+public class ProductRequestDTO {
 
     @NotBlank(message = "O nome do produto é obrigatório")
     private String name;
